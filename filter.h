@@ -4,11 +4,12 @@
 #include "xil_types.h"
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 #define WINDOW_SIZE 8
 #define SAMPLE_DELAY_LENGTH 5
 #define FIR_SAMPLE_DELAY_LENGTH 9
-#define IIR_SAMPLE_DELAY_LENGTH 11
+#define IIR_SAMPLE_DELAY_LENGTH 6
 
 #define SAMPLE_U_TO_S(x) (x<<8)
 #define SAMPLE_S_TO_U(x) (x>>8)
@@ -134,8 +135,8 @@ Fir_s* initFir(float gain, float *firConsts);
  * Initializes an Iir_s structure on the heap.
  *
  * @param gain The desired gain value for the IIR filter.
- * @param iirConstsNum Pointer to the array of IIR filter output coefficients.
- * @param iirConstsDenum Pointer to the array of IIR filter input coefficients.
+ * @param iirConstsNum Pointer to the array of IIR filter input coefficients.
+ * @param iirConstsDenum Pointer to the array of IIR filter output coefficients.
  * @return Pointer to the initialized Iir_s structure on the heap.
  */
 Iir_s* initIir(float gain, float *iirConstsNum, float *iirConstsDenum);

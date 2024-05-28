@@ -53,7 +53,7 @@ void setGainFir(Fir_s* firStruct, float gain) {
 }
 
 s32 firFilter(s32 input, Fir_s* firStruct) {
-	float filtOut;		// Filter output
+	float filtOut = 0;		// Filter output
 
 	// Delay line (unused)
 	// firStruct->sampBufFir[8] = firStruct->sampBufFir[7];
@@ -67,18 +67,18 @@ s32 firFilter(s32 input, Fir_s* firStruct) {
 	// firStruct->sampBufFir[0] = input;
 
 	// CIRCULAR BUFFER
-	firStruct->sampBufFir[firStruct->bufIndex] = (float)input;
 	firStruct->bufIndex++;
-	u8 sumIndex = firStruct->bufIndex;
 	if (firStruct->bufIndex >= FIR_SAMPLE_DELAY_LENGTH) {
 		firStruct->bufIndex = 0;
 	}
+	u8 sumIndex = firStruct->bufIndex + 1;
+
 
 	// Convolution
 	// for (u8 i = 0; i < FIR_SAMPLE_DELAY_LENGTH; i++) {
 	// 	filtOut += firStruct->firConsts[i] * firStruct->sampBufFir[i];
 	// }
-
+	firStruct->sampBufFir[firStruct->bufIndex] = (float)input;
 	// Convultion 2: Electric boogaloo
 	for (u8 i = 0; i < FIR_SAMPLE_DELAY_LENGTH; i++) {
 		if (sumIndex > 0) {
@@ -127,38 +127,37 @@ void setGainIir(Iir_s* iirStruct, float gain) {
 }
 
 s32 iirFilter(s32 input, Iir_s* iirStruct) {
+
 	/// CIRCULAR BUFFER INPUT
-	iirStruct->sampBufIirInput[iirStruct->bufIndex] = (float)input;
+
 	iirStruct->bufIndex++;
-	u8 sumIndexIn = iirStruct->bufIndex;
-	u8 sumIndexOut = iirStruct->bufIndex;
 	if (iirStruct->bufIndex >= IIR_SAMPLE_DELAY_LENGTH) {
 		iirStruct->bufIndex = 0;
 	}
-
+	iirStruct->sampBufIirInput[iirStruct->bufIndex] = (float)(input);
+	//printf("sampBufIirInput: %f\n", iirStruct->sampBufIirInput[iirStruct->bufIndex]);
+	// if (isnan(iirStruct->sampBufIirInput[iirStruct->bufIndex])) {
+	// 	printf("input nan\n");
+	// }
+	
 	// RECURSIVE CONVOLUTION
-	for (u8 i = 0; i < IIR_SAMPLE_DELAY_LENGTH; i++) {
-		if (sumIndexIn > 0) {
-			sumIndexIn--;
-		}
-		else {
-			sumIndexIn = IIR_SAMPLE_DELAY_LENGTH - 1;
+
+	iirStruct->sampBufIirOutput[iirStruct->bufIndex] = iirStruct->iirConstsNum[0] * iirStruct->sampBufIirInput[iirStruct->bufIndex];
+
+	u8 sumIndex = iirStruct->bufIndex;
+	for (u8 i = 1; i < IIR_SAMPLE_DELAY_LENGTH; i++) {
+		sumIndex--;
+		if (sumIndex < 0) {
+			sumIndex = IIR_SAMPLE_DELAY_LENGTH - 1;
 		}
 		iirStruct->sampBufIirOutput[iirStruct->bufIndex] +=
-			(iirStruct->iirConstsNum[i] * iirStruct->sampBufIirInput[sumIndexIn]); /*using input*/
+			(iirStruct->iirConstsNum[i] * iirStruct->sampBufIirInput[sumIndex]) /*using input*/
+			- (iirStruct->iirConstsDenum[i] * iirStruct->sampBufIirOutput[sumIndex]); /*using output*/
+		printf("sampBufIirOutput: %f\n", iirStruct->sampBufIirOutput[iirStruct->bufIndex]);
+		printf("numcalc: %f\n", (iirStruct->iirConstsNum[i] * iirStruct->sampBufIirInput[sumIndex]));
+		printf("denumcalc: %f\n", (iirStruct->iirConstsDenum[i] * iirStruct->sampBufIirOutput[sumIndex]));
 	}
-
-	for (u8 i = 0; i < IIR_SAMPLE_DELAY_LENGTH - 1; i++) {
-		if (sumIndexOut > 0) {
-			sumIndexOut--;
-		}
-		else {
-			sumIndexOut = IIR_SAMPLE_DELAY_LENGTH - 1;
-		}
-		iirStruct->sampBufIirOutput[iirStruct->bufIndex] -=
-			(iirStruct->iirConstsDenum[i+1] * iirStruct->sampBufIirOutput[sumIndexOut]); /*using output*/
-
-	}
+	printf("final sampBufIirOutput: %f\n", (iirStruct->sampBufIirOutput[iirStruct->bufIndex]));
 
 	// GAIN
 	return (s32)(iirStruct->sampBufIirOutput[iirStruct->bufIndex] * iirStruct->gain);

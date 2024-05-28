@@ -7,7 +7,7 @@
 #include "adventures_with_ip.h"
 
 Fir_s *FirL, *FirR;
-Iir_s *IirL, *IirR;
+Iir_s *IirL, *IirR, *IirL1, *IirR1;
 
 float firConsts[] = {
 		0.081071172466248717092263120775896823034f,
@@ -20,32 +20,25 @@ float firConsts[] = {
 		0.101402019276819382875842734392790589482f,
 		0.081071172466248717092263120775896823034f};
 
-float iirConstsA[] = {
-	1.0f,                                        
-  -9.185561530018109266393366851843893527985f,
-  38.327450434038539128778211306780576705933f,
- -95.690175779108983533660648390650749206543f,
- 158.332891616621225239214254543185234069824f,
--181.4462809101795812694035703316330909729f, 
- 145.855328521816034026414854452013969421387f,
- -81.210115140884056472714291885495185852051f,
-  29.973113112214083031403788481839001178741f,
-  -6.621459032524155574606083973776549100876f,
-   0.664808720750718951109092813567258417606f
+float num1[IIR_SAMPLE_DELAY_LENGTH] = {
+		0.8689530492,   -4.343358994,    8.685313225,   -8.685313225,    4.343358994,
+		    -0.8689530492
 };
 
-float iirConstsB[] = {
- 0.002167301756152853389053580812628752028f,  
--0.013464646910265129151063057122428290313f,  
- 0.036851474943063712574886636730298050679f,  
--0.056103034337550879151468308236871962436f,  
- 0.044673723511193114132922232784039806575f,  
- 0.000000000000000013877787807814456755295f,  
--0.044673723511193114132922232784039806575f,  
- 0.05610303433755086527368050042241520714f,   
--0.036851474943063712574886636730298050679f,  
- 0.013464646910265129151063057122428290313f,  
--0.002167301756152853389053580812628752028f  };
+float den1[IIR_SAMPLE_DELAY_LENGTH] = {
+		1,   -4.728032112,    8.931567192,   -8.424290657,    3.966059923,
+		    -0.7453004718
+};
+
+float num2[IIR_SAMPLE_DELAY_LENGTH] = {
+		0.002258419292,-0.002866517985, 0.002138149925, 0.002138149925,-0.002866517985,
+		   0.002258419292
+};
+
+float den2[IIR_SAMPLE_DELAY_LENGTH] = {
+		1,   -4.350269318,    7.899902821,   -7.454248428,    3.649420738,
+		    -0.7417456508
+};
 
 
 
@@ -88,8 +81,16 @@ float iirConstsB[] = {
  * ---------------------------------------------------------------------------- */
 void audio_stream(){
 	u32  in_left, in_right;
+	u8 dataReady = 0;
+	u32 statusReg = 0;
 
 	while (!XUartPs_IsReceiveData(UART_BASEADDR)){
+
+		while (dataReady == 0) {
+			statusReg = Xil_In32(I2S_STATUS_REG);
+			dataReady = statusReg >> 21;
+		}
+		dataReady = 0;
 		// Read audio input from codec
 		in_left = Xil_In32(I2S_DATA_RX_L_REG);
 		in_right = Xil_In32(I2S_DATA_RX_R_REG);
@@ -134,10 +135,18 @@ void moving_avg(){
 
 void fir(){
 	u32  in_left, in_right;
+	u8 dataReady = 0;
+	u32 statusReg = 0;
 	if (FirL == NULL) { FirL = initFir(1.0f, firConsts);}
 	if (FirR == NULL) { FirR = initFir(1.0f, firConsts);}
 
 	while (!XUartPs_IsReceiveData(UART_BASEADDR)){
+		while (dataReady == 0) {
+			statusReg = Xil_In32(I2S_STATUS_REG);
+			dataReady = statusReg >> 21;
+		}
+		dataReady = 0;
+
 		// Read audio input from codec
 		in_left = Xil_In32(I2S_DATA_RX_L_REG);
 		in_right = Xil_In32(I2S_DATA_RX_R_REG);
@@ -159,24 +168,64 @@ else fir();
 } // audio_stream()
 
 void iir(){
-	u32  in_left, in_right;
+	u32 in_left, in_right;
+	s32 in_left0, in_right0, in_left1, in_right1;
+	u8 dataReady = 0;
+	u32 statusReg = 0;
 
-	if (IirL == NULL) { IirL = initIir(1.0f, iirConstsB, iirConstsA);}
-	if (IirR == NULL) { IirR = initIir(1.0f, iirConstsB, iirConstsA);}
+
+	if (IirL == NULL) { IirL = initIir(0.5f, num1, den1);}
+	if (IirR == NULL) { IirR = initIir(0.5f, num1, den1);}
+	if (IirR1 == NULL) { IirR1 = initIir(0.5f, num2, den2);}
+	if (IirL1 == NULL) { IirL1 = initIir(0.5f, num2, den2);
+	// for (u8 i = 0; i < IIR_SAMPLE_DELAY_LENGTH; i++) {
+	// 	printf("Den1[%u]: %f\n", i, IirL->iirConstsDenum[i]);
+	// }
+
+	// for (u8 i = 0; i < IIR_SAMPLE_DELAY_LENGTH; i++) {
+	// 	printf("Num1[%u]: %f\n", i, IirL->iirConstsNum[i]);
+	// }
+
+	// for (u8 i = 0; i < IIR_SAMPLE_DELAY_LENGTH; i++) {
+	// 	printf("Den2[%u]: %f\n", i, IirL1->iirConstsDenum[i]);
+	// }
+
+	// for (u8 i = 0; i < IIR_SAMPLE_DELAY_LENGTH; i++) {
+	// 	printf("Num2[%u]: %f\n", i, IirL1->iirConstsNum[i]);
+	// }
+	}
 
 	while (!XUartPs_IsReceiveData(UART_BASEADDR)){
-		// Read audio input from codec
-		in_left = Xil_In32(I2S_DATA_RX_L_REG);
-		in_right = Xil_In32(I2S_DATA_RX_R_REG);
+		while (dataReady == 0) {
+			statusReg = Xil_In32(I2S_STATUS_REG);
+			dataReady = statusReg >> 21;
+		}
+		dataReady = 0;
 
+		// Read audio input from codec
+		in_left = SAMPLE_U_TO_S((Xil_In32(I2S_DATA_RX_L_REG)));
+		in_right = SAMPLE_U_TO_S((Xil_In32(I2S_DATA_RX_R_REG)));
+
+		// Xil_Out32(I2S_DATA_TX_L_REG, SAMPLE_S_TO_U(in_left));
+		// Xil_Out32(I2S_DATA_TX_R_REG, SAMPLE_S_TO_U(in_right));
+
+		//xil_printf("Left: %d, Right: %d\n", in_left, in_right);
 		//timerStart();
-		in_left = SAMPLE_S_TO_U(iirFilter(SAMPLE_U_TO_S(in_left), IirL));
-		in_right = SAMPLE_S_TO_U(iirFilter(SAMPLE_U_TO_S(in_right), IirR));
+		in_left0 = iirFilter(in_left, IirL);
+		in_right0 = iirFilter(in_right, IirR);
+		in_left1 = iirFilter(in_left, IirL1);
+		in_right1 = iirFilter(in_right, IirR1);
 		//timerEnd();
 
+		while(1){};
+
+		u32 out_left = SAMPLE_S_TO_U((in_left0 + in_left1));
+		u32 out_right = SAMPLE_S_TO_U((in_right0 + in_right1));
+
+		//xil_printf("Left: %d, Right: %d\n", in_left, in_right);
 		// Write audio output to codec
-		Xil_Out32(I2S_DATA_TX_L_REG, in_left);
-		Xil_Out32(I2S_DATA_TX_R_REG, in_right);
+		Xil_Out32(I2S_DATA_TX_L_REG, SAMPLE_S_TO_U(in_left0));
+		Xil_Out32(I2S_DATA_TX_R_REG, SAMPLE_S_TO_U(in_right0));
 	}
 	if(XUartPs_ReadReg(UART_BASEADDR, XUARTPS_FIFO_OFFSET) == 'q') menu();
 	else iir();

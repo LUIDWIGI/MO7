@@ -110,7 +110,7 @@ void menu(){
 		fir();
 		break;
 	case 'i':
-			printf("ENTERING IIR FILTER OPERATION");
+			printf("ENTERING IIR FILTER OPERATION\n");
 			xil_printf("Press 'q' to return to the main menu\r\n");
 			iir();
 			break;
